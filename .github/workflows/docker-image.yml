@@ -24,6 +24,7 @@ jobs:
           cache: "pnpm"
       - run: pnpm approve-builds --all
       - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter backend exec prisma generate
       - run: pnpm --filter backend exec prisma migrate deploy
       - run: pnpm --filter backend db:seed
       - run: pnpm --filter backend test
