@@ -1,0 +1,20 @@
+{
+  "name": "cardinals-corner",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cardinal's Corner — web-based room scheduling, availability assessment, and reservation management for Mapua University (Intramuros). Split monorepo: Svelte frontend + Node backend + Prisma + SQLite.",
+  "packageManager": "pnpm@12.4.1",
+  "engines": {
+    "node": "22.x (better-sqlite3 has no Node 26 prebuilds; system node is v26 — use Node 22)"
+  },
+  "scripts": {
+    "dev": "pnpm --parallel dev",
+    "dev:backend": "pnpm --filter backend dev",
+    "dev:frontend": "pnpm --filter frontend dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "db:migrate": "pnpm --filter backend db:migrate",
+    "db:seed": "pnpm --filter backend db:seed",
+    "docker:build": "docker build -t cardinals-corner:local ."
+  }
+}

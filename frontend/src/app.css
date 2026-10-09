@@ -1,0 +1,13 @@
+/* Minimal reset — component styles live in App.svelte */
+* {
+  box-sizing: border-box;
+}
+a {
+  color: #c8102e;
+}
+pre {
+  white-space: pre-wrap;
+  background: #f4f0ef;
+  padding: 0.6rem;
+  border-radius: 8px;
+}

@@ -1,0 +1,145 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Roles: ADMIN manages everything; STAFF covers Authorized Personnel + Faculty
+// (search/view/compare/request); STUDENT reviews availability and submits/monitors
+// their own reservation requests.
+enum Role {
+  ADMIN
+  STAFF
+  STUDENT
+}
+
+enum RoomStatus {
+  ACTIVE
+  ARCHIVED
+}
+
+enum ReservationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  CANCELLED
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique // university email
+  role         Role     @default(STUDENT)
+  department   String?
+  passwordHash String
+  active       Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  reservationsRequested Reservation[] @relation("Requester")
+  reservationsReviewed  Reservation[] @relation("Reviewer")
+  activityLogs          ActivityLog[]
+}
+
+model Room {
+  id          String     @id @default(cuid())
+  code        String     @unique // e.g. SW305, AV-1, Smart Classroom 1
+  campus      String     @default("Intramuros")
+  wing        String // S, SW, W, N, NW, NB, SB, AV, SMART, OTHER
+  roomType    String     @default("classroom") // classroom | laboratory | office | av | smart | stock | bridge | other
+  capacity    Int        @default(30)
+  openMin     Int        @default(480) // operating hours, minutes since midnight (07:00)
+  closeMin    Int        @default(1170) // 19:30
+  status      RoomStatus @default(ACTIVE)
+  description String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  classSchedules ClassSchedule[]
+  closures       Closure[]
+  reservations   Reservation[]
+}
+
+model Term {
+  id        String   @id @default(cuid())
+  name      String   @unique // e.g. 2026-1Q
+  startDate DateTime
+  endDate   DateTime
+  createdAt DateTime @default(now())
+
+  classSchedules ClassSchedule[]
+}
+
+model ClassSchedule {
+  id         String   @id @default(cuid())
+  roomId     String
+  termId     String
+  courseLabel String // course / section label
+  weekday    Int // 0=Sunday .. 6=Saturday (Mon=1 typical)
+  startMin   Int // minutes since midnight
+  endMin     Int
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  term Term @relation(fields: [termId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, termId, weekday])
+}
+
+model Closure {
+  id        String   @id @default(cuid())
+  roomId    String
+  date      String // YYYY-MM-DD (Philippine local time)
+  startMin  Int? // null = whole day
+  endMin    Int?
+  reason    String
+  createdAt DateTime @default(now())
+
+  room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
+
+  @@index([roomId, date])
+}
+
+model Reservation {
+  id               String            @id @default(cuid())
+  requesterId      String
+  roomId           String
+  date             String // YYYY-MM-DD (Philippine local time)
+  startMin         Int
+  endMin           Int
+  participantCount Int
+  purpose          String
+  status           ReservationStatus @default(PENDING)
+  submittedAt      DateTime          @default(now())
+  reviewerId       String?
+  decidedAt        DateTime?
+  reason           String? // rejection reason / cancellation reason
+  externalSource   String? // Registrar | IT | ILMO | OSAAR | null (set via sync API)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+
+  requester User  @relation("Requester", fields: [requesterId], references: [id])
+  reviewer  User? @relation("Reviewer", fields: [reviewerId], references: [id])
+  room      Room  @relation(fields: [roomId], references: [id])
+
+  @@index([roomId, date, status])
+  @@index([requesterId, status])
+}
+
+model ActivityLog {
+  id        String   @id @default(cuid())
+  actorId   String?
+  action    String // e.g. reservation.submit, reservation.approve, room.create, sync.upsert
+  entityType String // room | schedule | closure | reservation | user | term | sync
+  entityId  String?
+  detail    String? // JSON string
+  createdAt DateTime @default(now())
+
+  actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([entityType, entityId])
+}
