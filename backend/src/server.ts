@@ -56,7 +56,17 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
 // administrator from ADMIN_EMAIL/ADMIN_PASSWORD so the system is usable
 // without demo seeds. Never runs when users already exist.
 async function bootstrapAdmin() {
-  const count = await prisma.user.count();
+  let count: number;
+  try {
+    count = await prisma.user.count();
+  } catch {
+    // Most likely the database was never migrated (fresh volume). The
+    // container entrypoint runs `prisma migrate deploy` before starting;
+    // bare `node dist/server.js` needs it run manually. Stay up so the
+    // cause is visible instead of crashing on boot.
+    console.log("Database tables are missing: run `prisma migrate deploy` first.");
+    return;
+  }
   if (count > 0) return;
   const email = process.env.ADMIN_EMAIL;
   const password = process.env.ADMIN_PASSWORD;
