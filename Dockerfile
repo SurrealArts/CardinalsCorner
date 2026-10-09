@@ -33,5 +33,5 @@ COPY --from=backend-build /app/backend/prisma ./backend/prisma
 COPY --from=backend-build /app/backend/node_modules ./backend/node_modules
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 VOLUME ["/data"]
-EXPOSE 3000
+EXPOSE 3040
 CMD ["node", "backend/dist/server.js"]

@@ -50,7 +50,7 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   res.status(500).json({ error: "Something went wrong, please try again" });
 });
 
-const PORT = Number(process.env.PORT) || 3000;
+const PORT = Number(process.env.PORT) || 3040;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Cardinal's Corner API listening on 0.0.0.0:${PORT}`);
 });

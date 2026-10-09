@@ -30,7 +30,7 @@ pnpm dev
 ```
 
 - Frontend: http://localhost:5173
-- Backend API: http://localhost:3000/api/health
+- Backend API: http://localhost:3040/api/health
 
 Sign in with one of the seeded demo accounts:
 
@@ -43,7 +43,7 @@ Sign in with one of the seeded demo accounts:
 ## Useful commands
 
 ```bash
-pnpm dev                    # backend (:3000) + frontend (:5173, proxies /api)
+pnpm dev                    # backend (:3040) + frontend (:5173, proxies /api)
 pnpm --filter backend test  # unit tests (availability/overlap rules)
 pnpm --filter backend db:seed   # re-load sample data (idempotent)
 pnpm -r build               # production builds for both packages
@@ -54,7 +54,7 @@ frontend and the API on one port):
 
 ```bash
 pnpm -r build
-PORT=3000 node backend/dist/server.js
+PORT=3040 node backend/dist/server.js
 ```
 
 ## Project structure

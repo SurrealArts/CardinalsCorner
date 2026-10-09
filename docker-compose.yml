@@ -2,10 +2,10 @@ services:
   app:
     build: .
     ports:
-      - "${PORT:-3000}:3000"
+      - "${PORT:-3040}:${PORT:-3040}"
     environment:
       - NODE_ENV=production
-      - PORT=3000
+      - PORT=${PORT:-3040}
       - DATABASE_URL=file:/data/cardinals-corner.db
       - JWT_SECRET=${JWT_SECRET:?set JWT_SECRET in Dokploy env}
       - SYNC_API_KEYS=${SYNC_API_KEYS:-}
