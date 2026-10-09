@@ -2,9 +2,9 @@
 FROM node:22-bookworm-slim AS frontend-build
 RUN corepack enable && corepack prepare pnpm@12.4.1 --activate
 WORKDIR /app
-COPY pnpm-workspace.yaml package.json ./
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY frontend/package.json frontend/package.json
-RUN pnpm install --filter frontend --frozen-lockfile || pnpm install --filter frontend --no-frozen-lockfile
+RUN pnpm install --filter frontend --frozen-lockfile
 COPY frontend/ frontend/
 RUN pnpm --filter frontend build
 
@@ -12,9 +12,9 @@ RUN pnpm --filter frontend build
 FROM node:22-bookworm-slim AS backend-build
 RUN corepack enable && corepack prepare pnpm@12.4.1 --activate
 WORKDIR /app
-COPY pnpm-workspace.yaml package.json ./
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY backend/package.json backend/package.json
-RUN pnpm install --filter backend --frozen-lockfile || pnpm install --filter backend --no-frozen-lockfile
+RUN pnpm install --filter backend --frozen-lockfile
 COPY backend/ backend/
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
 RUN pnpm --filter backend build
@@ -25,13 +25,14 @@ FROM node:22-bookworm-slim AS runtime
 ENV NODE_ENV=production
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@12.4.1 --activate
-COPY pnpm-workspace.yaml package.json ./
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY backend/package.json backend/package.json
-RUN pnpm install --filter backend --prod --frozen-lockfile || pnpm install --filter backend --prod --no-frozen-lockfile
+RUN pnpm install --filter backend --prod --frozen-lockfile
 COPY --from=backend-build /app/backend/dist ./backend/dist
 COPY --from=backend-build /app/backend/prisma ./backend/prisma
-COPY --from=backend-build /app/backend/node_modules ./backend/node_modules
+COPY --from=backend-build /app/backend/docker-entrypoint.sh ./backend/docker-entrypoint.sh
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
+RUN chmod +x ./backend/docker-entrypoint.sh
 VOLUME ["/data"]
 EXPOSE 3040
-CMD ["node", "backend/dist/server.js"]
+ENTRYPOINT ["./backend/docker-entrypoint.sh"]

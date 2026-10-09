@@ -13,6 +13,8 @@ import { closuresRouter, schedulesRouter } from "./routes/schedules.js";
 import { reservationsRouter } from "./routes/reservations.js";
 import { reportsRouter, termsRouter } from "./routes/reports.js";
 import { syncRouter } from "./routes/sync.js";
+import { prisma } from "./lib/prisma.js";
+import { hashPassword } from "./lib/auth.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -49,6 +51,26 @@ app.use((err: unknown, _req: express.Request, res: express.Response, _next: expr
   console.error(err);
   res.status(500).json({ error: "Something went wrong, please try again" });
 });
+
+// First-boot admin: on an empty database (fresh volume), create the initial
+// administrator from ADMIN_EMAIL/ADMIN_PASSWORD so the system is usable
+// without demo seeds. Never runs when users already exist.
+async function bootstrapAdmin() {
+  const count = await prisma.user.count();
+  if (count > 0) return;
+  const email = process.env.ADMIN_EMAIL;
+  const password = process.env.ADMIN_PASSWORD;
+  if (email && password) {
+    await prisma.user.create({
+      data: { name: "Administrator", email, role: "ADMIN", passwordHash: await hashPassword(password) },
+    });
+    console.log(`Bootstrapped initial admin ${email}`);
+  } else {
+    console.log("No users yet: set ADMIN_EMAIL/ADMIN_PASSWORD to create the first admin, or seed demo data.");
+  }
+}
+
+await bootstrapAdmin();
 
 const PORT = Number(process.env.PORT) || 3040;
 app.listen(PORT, "0.0.0.0", () => {
