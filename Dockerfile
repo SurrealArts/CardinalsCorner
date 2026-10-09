@@ -17,8 +17,9 @@ COPY backend/package.json backend/package.json
 RUN pnpm install --filter backend --frozen-lockfile
 COPY backend/ backend/
 COPY --from=frontend-build /app/frontend/dist ./frontend/dist
+# Dummy URL: `generate` only needs the env var present, not a live database.
+ENV DATABASE_URL="file:./dev.db"
 RUN pnpm --filter backend build
-RUN pnpm --filter backend exec prisma generate || true
 
 # ---- runtime ----
 FROM node:22-bookworm-slim AS runtime
