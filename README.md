@@ -1,9 +1,9 @@
 # Cardinal's Corner
 
 A public class-schedule display and vacancy search system for Mapúa University
-(Intramuros). Browse room schedules, compare rooms side-by-side, search vacant
-periods across the whole catalog, and inspect any room's full weekly timetable.
-One invisible admin account maintains terms and schedules.
+(Intramuros). Browse room schedules by building, filter rooms by vacancy
+duration, and inspect any room's full weekly timetable with a live
+now-indicator. One invisible admin account maintains terms and schedules.
 
 Live: https://cardinals-corner.anatoarchives.win
 
@@ -155,6 +155,34 @@ use it on a term holding real data.
 
 Verify: `https://cardinals-corner.anatoarchives.win/api/health` → `{"ok":true,…}`.
 
+## Features
+
+### Public site
+
+- **Building browser** — five building pills (South, Southwest, West,
+  Northwest, North) with brand-blended colors; each section shows a preview
+  of rooms with a "See All" expansion.
+- **Vacancy filters** — Vacant now, 1 hour, 2 hours, 3 hours, Custom
+  (minutes), Whole day. Clicking the active chip clears the filter.
+- **Room cards** — live VACANT/OCCUPIED badge, "Vacant until HH:MM" /
+  "Occupied until HH:MM" indicator, building name.
+- **Room timetable** — full week grid with a now-indicator that highlights
+  the current day column, current time row, and their intersection.
+- **Dark mode** — sun/moon toggle in the header; defaults to device
+  preference, persists user choice, color-only transitions.
+- **Philippine Time clock** — live clock in the header ribbon (Asia/Manila).
+
+### Admin panel (unlinked `/admin` page)
+
+- **Terms** — table of existing terms with name, dates, period, and day
+  hours; separate form for creating/editing terms; working-term selector.
+- **CSV schedule import** — bulk import with sanitization and overlap
+  verification.
+- **Schedules** — searchable, paginated (50/page) list of schedules in the
+  working term with delete.
+- **Accounts** — password resets and sign-out-everywhere.
+- All changes are recorded in the activity log.
+
 ## Scheduling model
 
 - Vacancy is computed from regular class schedules and room closures.
@@ -168,19 +196,10 @@ Verify: `https://cardinals-corner.anatoarchives.win/api/health` → `{"ok":true,
 - Rooms are archived, never hard-deleted, to preserve schedule history.
 - All dates use Philippine local time (Asia/Manila).
 
-## Admin maintenance (unlinked `/admin` page)
-
-- Terms: create per `NT-YYYY-ZZZZ` (e.g. `1T-2026-2027`), edit dates and grid.
-- Schedules: per-term CSV import (`room_code,course,section,professor,weekday,
-  start,end[,term_name]`), single-row delete for corrections.
-- Accounts: password resets and sign-out-everywhere.
-- All changes are recorded in the activity log.
-
 ## Project structure
 
 ```
-frontend/   # Svelte SPA: schedules catalog, vacancy tally, room week view,
-            #   hidden admin page
+frontend/   # Svelte SPA: vacancy browser, room week view, hidden admin page
 backend/    # Express API + Prisma schema/seed + vitest
 backend/prisma/
   schema.prisma       # users, rooms, terms, class schedules, closures,

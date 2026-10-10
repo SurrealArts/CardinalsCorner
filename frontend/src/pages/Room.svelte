@@ -177,7 +177,8 @@
   }
   .timescroll :global(.ttable) {
     table-layout: fixed;
-    border-collapse: collapse;
+    border-collapse: separate;
+    border-spacing: 0;
     min-width: 880px;
     width: 100%;
   }
@@ -197,9 +198,6 @@
     background: var(--now-wash);
     border-left: 2px solid var(--now-line);
     border-right: 2px solid var(--now-line);
-  }
-  .timescroll :global(.ttable th.nowcol) {
-    border-top: 2px solid var(--now-line);
   }
   .timescroll :global(.ttable tr.nowrow > td) {
     background: var(--now-wash);
