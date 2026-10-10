@@ -6,6 +6,7 @@
   import Dashboard from "./pages/Dashboard.svelte";
   import Room from "./pages/Room.svelte";
   import Admin from "./pages/Admin.svelte";
+  import NotFound from "./pages/NotFound.svelte";
   import logoFull from "./assets/logo-full.svg";
 
   // Public catalog. The admin page is intentionally unlinked (no nav entry):
@@ -14,6 +15,7 @@
     "/": Dashboard,
     "/room/:id": Room,
     "/admin": Admin,
+    "*": NotFound,
   };
 
   let user = $state(session.user);
