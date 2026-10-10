@@ -16,12 +16,14 @@
   let error = $state("");
   let busy = $state(false);
 
-  if (!session.user) location.hash = "#/login";
-
   async function load() {
     error = "";
-    const q = new URLSearchParams({ search, wing, minCapacity, status: "ACTIVE" });
-    rooms = await api<Room[]>(`/rooms?${q}`);
+    try {
+      const q = new URLSearchParams({ search, wing, minCapacity, status: "ACTIVE" });
+      rooms = await api<Room[]>(`/rooms?${q}`);
+    } catch (e) {
+      error = (e as Error).message;
+    }
   }
 
   async function compare() {
@@ -45,6 +47,12 @@
 
   onMount(async () => {
     await session.refresh();
+    // Guard after refresh (not at module load): a hard reload with a valid
+    // stored token starts with session.user null until refresh resolves.
+    if (!session.user) {
+      location.hash = "#/login";
+      return;
+    }
     await load();
     mine = await api<any[]>("/reservations/mine").catch(() => []);
   });
@@ -54,17 +62,17 @@
   <h1>Dashboard</h1>
   <p class="muted">{rooms.length} active rooms · Intramuros · select up to 6 rooms to compare side-by-side</p>
   <div class="row">
-    <div class="field"><label>Search code</label><input bind:value={search} placeholder="SW305" oninput={load} /></div>
-    <div class="field"><label>Wing</label>
-      <select bind:value={wing} onchange={load}>
+    <div class="field"><label for="f-search">Search code</label><input id="f-search" bind:value={search} placeholder="SW305" oninput={load} /></div>
+    <div class="field"><label for="f-wing">Wing</label>
+      <select id="f-wing" bind:value={wing} onchange={load}>
         <option value="">All</option><option>S</option><option>SW</option><option>W</option><option>N</option><option>NW</option><option>NB</option><option>SB</option><option>AV</option><option>SMART</option><option>OTHER</option>
       </select>
     </div>
-    <div class="field"><label>Min capacity</label><input type="number" min="0" bind:value={minCapacity} onchange={load} /></div>
-    <div class="field"><label>Date</label><input type="date" bind:value={date} /></div>
-    <div class="field"><label>Start</label><input type="time" bind:value={start} /></div>
-    <div class="field"><label>End</label><input type="time" bind:value={end} /></div>
-    <div class="field"><label>&nbsp;</label><button class="primary" onclick={compare} disabled={busy || selected.length === 0}>Compare selected ({selected.length})</button></div>
+    <div class="field"><label for="f-cap">Min capacity</label><input id="f-cap" type="number" min="0" bind:value={minCapacity} onchange={load} /></div>
+    <div class="field"><label for="f-date">Date</label><input id="f-date" type="date" bind:value={date} /></div>
+    <div class="field"><label for="f-start">Start</label><input id="f-start" type="time" bind:value={start} /></div>
+    <div class="field"><label for="f-end">End</label><input id="f-end" type="time" bind:value={end} /></div>
+    <div class="field"><span class="spacer" aria-hidden="true">&nbsp;</span><button class="primary" onclick={compare} disabled={busy || selected.length === 0}>Compare selected ({selected.length})</button></div>
   </div>
   {#if error}<div class="error">{error}</div>{/if}
 </div>

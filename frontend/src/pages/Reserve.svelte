@@ -51,18 +51,18 @@
   <h1>Reservation request</h1>
   <p class="muted">Check availability first, then submit. Approval is required; pending does not hold the room.</p>
   <div class="row">
-    <div class="field"><label>Room</label>
-      <select bind:value={roomId}>
+    <div class="field"><label for="r-room">Room</label>
+      <select id="r-room" bind:value={roomId}>
         <option value="">— choose —</option>
         {#each rooms.slice(0, 300) as r}<option value={r.id}>{r.code} (cap {r.capacity})</option>{/each}
       </select>
     </div>
-    <div class="field"><label>Date</label><input type="date" bind:value={date} /></div>
-    <div class="field"><label>Start</label><input type="time" bind:value={start} /></div>
-    <div class="field"><label>End</label><input type="time" bind:value={end} /></div>
-    <div class="field"><label>Participants</label><input type="number" min="1" bind:value={count} /></div>
+    <div class="field"><label for="r-date">Date</label><input id="r-date" type="date" bind:value={date} /></div>
+    <div class="field"><label for="r-start">Start</label><input id="r-start" type="time" bind:value={start} /></div>
+    <div class="field"><label for="r-end">End</label><input id="r-end" type="time" bind:value={end} /></div>
+    <div class="field"><label for="r-count">Participants</label><input id="r-count" type="number" min="1" bind:value={count} /></div>
   </div>
-  <div class="field" style="margin-top:.6rem"><label>Activity purpose</label><textarea rows="3" bind:value={purpose} placeholder="e.g. CPE106L-4 project meeting"></textarea></div>
+  <div class="field" style="margin-top:.6rem"><label for="r-purpose">Activity purpose</label><textarea id="r-purpose" rows="3" bind:value={purpose} placeholder="e.g. CPE106L-4 project meeting"></textarea></div>
   <p class="row">
     <button class="ghost" onclick={checkAvail}>Check availability</button>
     <button class="primary" onclick={submit}>Submit request</button>

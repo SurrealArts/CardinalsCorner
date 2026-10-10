@@ -54,7 +54,7 @@ frontend and the API on one port):
 
 ```bash
 pnpm -r build
-PORT=3040 node backend/dist/server.js
+pnpm --filter backend start   # reads backend/.env; serves API + frontend on PORT
 ```
 
 ## Project structure

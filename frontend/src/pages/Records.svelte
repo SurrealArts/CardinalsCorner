@@ -60,7 +60,7 @@
 {#if tab === "queue"}
   <div class="card">
     <h2>Pending requests ({queue.length})</h2>
-    <div class="field"><label>Rejection reason (required to reject)</label><input bind:value={reason} placeholder="e.g. Room reserved forMake-up class" /></div>
+    <div class="field"><label for="rec-reason">Rejection reason (required to reject)</label><input id="rec-reason" bind:value={reason} placeholder="e.g. Room reserved forMake-up class" /></div>
     <table>
       <thead><tr><th>Date</th><th>Room</th><th>Time</th><th>By</th><th>Purpose</th><th></th></tr></thead>
       <tbody>
@@ -79,7 +79,7 @@
 {:else if tab === "rooms"}
   <div class="card">
     <h2>Rooms</h2>
-    <div class="row"><div class="field"><label>Search</label><input bind:value={search} oninput={loadRooms} /></div></div>
+    <div class="row"><div class="field"><label for="rec-search">Search</label><input id="rec-search" bind:value={search} oninput={loadRooms} /></div></div>
     <table>
       <thead><tr><th>Code</th><th>Wing</th><th>Type</th><th>Cap</th><th>Status</th></tr></thead>
       <tbody>

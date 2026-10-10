@@ -32,11 +32,11 @@
   <h1>Reports</h1>
   <p class="muted">Filtered occupancy summaries (scheduled time, not observed use) + reservation status counts.</p>
   <div class="row">
-    <div class="field"><label>Term</label><select bind:value={termId}>{#each terms as t}<option value={t.id}>{t.name}</option>{/each}</select></div>
-    <div class="field"><label>Wing</label><select bind:value={wing}><option value="">All</option><option>S</option><option>SW</option><option>W</option><option>N</option><option>NW</option><option>AV</option></select></div>
-    <div class="field"><label>From</label><input type="date" bind:value={from} /></div>
-    <div class="field"><label>To</label><input type="date" bind:value={to} /></div>
-    <div class="field"><label>&nbsp;</label><span class="row"><button class="primary" onclick={generate}>Generate</button><button class="ghost" onclick={() => window.print()}>Print summary</button></span></div>
+    <div class="field"><label for="rep-term">Term</label><select id="rep-term" bind:value={termId}>{#each terms as t}<option value={t.id}>{t.name}</option>{/each}</select></div>
+    <div class="field"><label for="rep-wing">Wing</label><select id="rep-wing" bind:value={wing}><option value="">All</option><option>S</option><option>SW</option><option>W</option><option>N</option><option>NW</option><option>AV</option></select></div>
+    <div class="field"><label for="rep-from">From</label><input id="rep-from" type="date" bind:value={from} /></div>
+    <div class="field"><label for="rep-to">To</label><input id="rep-to" type="date" bind:value={to} /></div>
+    <div class="field"><span class="spacer" aria-hidden="true">&nbsp;</span><span class="row"><button class="primary" onclick={generate}>Generate</button><button class="ghost" onclick={() => window.print()}>Print summary</button></span></div>
   </div>
   {#if error}<div class="error">{error}</div>{/if}
 </div>

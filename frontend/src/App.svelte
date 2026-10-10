@@ -21,12 +21,14 @@
   };
 
   let user = $state(session.user);
-  let version = $state(0);
+  // NOTE: never remount <Router> on session updates (e.g. {#key ...}): pages
+  // like Dashboard refresh the session in onMount, and remounting would
+  // destroy/recreate the page in a loop — killing open dropdowns and wiping
+  // page state. The nav below re-renders from `user` alone; pages stay mounted.
   onMount(() => {
     session.refresh();
     return session.subscribe(() => {
       user = session.user;
-      version++;
     });
   });
 </script>
@@ -56,9 +58,7 @@
 </header>
 
 <main>
-  {#key version}
-    <Router {routes} />
-  {/key}
+  <Router {routes} />
 </main>
 
 <style>
@@ -175,6 +175,12 @@
     font-size: 0.78rem;
     color: var(--muted);
     font-weight: 600;
+  }
+  :global(.field .spacer) {
+    font-size: 0.78rem;
+    font-weight: 600;
+    visibility: hidden;
+    user-select: none;
   }
   :global(.ok) {
     color: #137333;

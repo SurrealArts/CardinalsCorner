@@ -37,11 +37,11 @@
     conflicts without saving. Real sync calls use the same validation + conflict checks as the UI.
   </p>
   <div class="row">
-    <div class="field"><label>Room code</label><input bind:value={roomCode} /></div>
-    <div class="field"><label>Date</label><input type="date" bind:value={date} /></div>
-    <div class="field"><label>Start</label><input type="time" bind:value={start} /></div>
-    <div class="field"><label>End</label><input type="time" bind:value={end} /></div>
-    <div class="field"><label>&nbsp;</label><button class="primary" onclick={dryRun}>Dry-run check</button></div>
+    <div class="field"><label for="s-code">Room code</label><input id="s-code" bind:value={roomCode} /></div>
+    <div class="field"><label for="s-date">Date</label><input id="s-date" type="date" bind:value={date} /></div>
+    <div class="field"><label for="s-start">Start</label><input id="s-start" type="time" bind:value={start} /></div>
+    <div class="field"><label for="s-end">End</label><input id="s-end" type="time" bind:value={end} /></div>
+    <div class="field"><span class="spacer" aria-hidden="true">&nbsp;</span><button class="primary" onclick={dryRun}>Dry-run check</button></div>
   </div>
   {#if error}<div class="error">{error}</div>{/if}
   {#if result}
