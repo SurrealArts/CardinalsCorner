@@ -127,15 +127,18 @@ admin CSV import — rooms with no schedules simply show as Available.
 
 **Reset admin password.** If you can sign in: Admin page → Accounts → Reset
 password (also kills the account's other sessions). If locked out entirely,
-empty the users table from the app's Dokploy terminal, then restart the task —
-first boot recreates the admin from `ADMIN_EMAIL`/`ADMIN_PASSWORD`:
+empty the users table from the app's Dokploy terminal (you land inside the
+container at `/app` — there is no `docker` binary in there, run node
+directly), then restart the task from the Deploy Settings buttons — first boot
+recreates the admin from `ADMIN_EMAIL`/`ADMIN_PASSWORD`:
 
 ```bash
-# Dokploy → cardinals-corner → Open Terminal (working dir /app)
-cd backend && node -e 'require("better-sqlite3")("/data/cardinals-corner.db").exec("DELETE FROM \"User\"")'
+# Dokploy → cardinals-corner → Open Terminal (prompt is root@…:/app#)
+node --input-type=module -e "import('./backend/dist/lib/prisma.js').then(async ({prisma}) => { console.log(await prisma.user.deleteMany()); process.exit(0); })"
 ```
 
-then Redeploy (or restart the task) with `ADMIN_EMAIL`/`ADMIN_PASSWORD` set.
+then Reload/Restart via the Deploy Settings buttons above the terminal.
+Sessions cascade away with the users.
 
 **Seed demo schedules.** Dense generated data (~1:1 occupied:free, heavy
 per-day variance) for demos and load checks — same generator as local `db:seed`.

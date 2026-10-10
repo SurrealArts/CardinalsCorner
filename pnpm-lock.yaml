@@ -177,6 +177,9 @@ importers:
       bcryptjs:
         specifier: ^3.0.2
         version: 3.0.3
+      better-sqlite3:
+        specifier: ^11.10.0
+        version: 11.10.0
       cookie-parser:
         specifier: ^1.4.7
         version: 1.4.7
@@ -223,9 +226,6 @@ importers:
       '@types/node':
         specifier: ^22.9.0
         version: 22.20.5
-      better-sqlite3:
-        specifier: ^11.10.0
-        version: 11.10.0
       tsx:
         specifier: ^4.19.2
         version: 4.23.15
