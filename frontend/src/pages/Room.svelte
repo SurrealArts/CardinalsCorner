@@ -29,14 +29,22 @@
     return (current ?? list[0])?.id ?? "";
   }
 
-  async function loadAll(id: string) {
+  async function loadRoom(id: string) {
     error = "";
     room = null;
     cells = {};
     grid = [];
     try {
-      const t = await api<any>(`/rooms/${id}/timetable?${new URLSearchParams(termId ? { termId } : {})}`);
-      room = t.room;
+      room = await api<Room>(`/rooms/${id}`);
+    } catch (e) {
+      error = (e as Error).message;
+    }
+  }
+
+  async function loadTimetable(id: string) {
+    if (!termId) return;
+    try {
+      const t = await api<any>(`/rooms/${id}/timetable?${new URLSearchParams({ termId })}`);
       term = t.term;
       grid = t.grid;
       const map: Record<number, Record<number, Cell | "busy">> = {};
@@ -60,8 +68,13 @@
     import("../lib/session").then(({ session }) => session.refresh());
   });
 
+  // Room header loads immediately (even with no terms yet); the timetable
+  // follows once a term is selected.
   $effect(() => {
-    if (termId || terms.length > 0) loadAll(params.id);
+    loadRoom(params.id);
+  });
+  $effect(() => {
+    if (room && termId) loadTimetable(room.id);
   });
 </script>
 
@@ -76,18 +89,24 @@
         : ""}
     </p>
     <div class="row">
-      <div class="field"><label for="r-term">Term</label>
-        <select id="r-term" bind:value={termId}>
-          {#each terms as t}<option value={t.id}>{t.name}</option>{/each}
-        </select>
-      </div>
+      {#if terms.length > 0}
+        <div class="field"><label for="r-term">Term</label>
+          <select id="r-term" bind:value={termId}>
+            {#each terms as t}<option value={t.id}>{t.name}</option>{/each}
+          </select>
+        </div>
+      {:else}
+        <p class="muted">No terms yet — schedules appear once a term is opened.</p>
+      {/if}
     </div>
     {#if error}<div class="error">{error}</div>{/if}
   </div>
 
   <div class="card timescroll">
     <h2>Weekly schedule</h2>
-    {#if grid.length < 2}
+    {#if !termId}
+      <p class="muted">Select a term to view its classes.</p>
+    {:else if grid.length < 2}
       <p class="muted">No classes scheduled this term.</p>
     {:else}
       <table class="ttable">
