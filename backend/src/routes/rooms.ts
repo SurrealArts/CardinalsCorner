@@ -7,14 +7,13 @@ import { DAY_CLOSE_MIN, DAY_OPEN_MIN } from "../lib/schedule-validate.js";
 
 export const roomsRouter = Router();
 
-// Public catalog (search, wing/type filters).
+// Public catalog (search + wing filters).
 roomsRouter.get("/", async (req, res) => {
-  const { search = "", wing = "", type = "", status = "ACTIVE" } = req.query as Record<string, string>;
+  const { search = "", wing = "", status = "ACTIVE" } = req.query as Record<string, string>;
   const rooms = await prisma.room.findMany({
     where: {
       status: status === "ALL" ? undefined : (status as "ACTIVE"),
       wing: wing || undefined,
-      roomType: type || undefined,
       OR: search
         ? [{ code: { contains: search } }, { description: { contains: search } }]
         : undefined,
@@ -55,7 +54,7 @@ roomsRouter.get("/:id/timetable", async (req, res) => {
   const [open, close] = hi > lo ? [lo, hi] : [DAY_OPEN_MIN, DAY_CLOSE_MIN];
   const grid = buildGrid(classes, term.dayStartMin, term.periodMin, open, close);
   res.json({
-    room: { id: room.id, code: room.code, wing: room.wing, roomType: room.roomType, description: room.description },
+    room: { id: room.id, code: room.code, wing: room.wing, description: room.description },
     term: { id: term.id, name: term.name, periodMin: term.periodMin, dayStartMin: term.dayStartMin },
     classes: classes.map((c) => ({ weekday: c.weekday, startMin: c.startMin, endMin: c.endMin, course: c.course, section: c.section, professor: c.professor })),
     grid,
@@ -65,7 +64,6 @@ roomsRouter.get("/:id/timetable", async (req, res) => {
 const roomSchema = z.object({
   code: z.string().min(1),
   wing: z.string().min(1),
-  roomType: z.string().default("classroom"),
   openMin: z.number().int().min(0).max(1440).default(480),
   closeMin: z.number().int().min(0).max(1440).default(1170),
   description: z.string().optional(),
@@ -91,7 +89,7 @@ roomsRouter.patch("/:id", requireAuth, requireRole("ADMIN"), async (req, res) =>
   res.json(room);
 });
 
-// Archive preserves referenced records and reservation history (no hard delete).
+// Archive preserves referenced records and schedule history (no hard delete).
 roomsRouter.post("/:id/archive", requireAuth, requireRole("ADMIN"), async (req, res) => {
   const room = await prisma.room.update({ where: { id: req.params.id }, data: { status: "ARCHIVED" } });
   await prisma.activityLog.create({ data: { actorId: req.user!.id, action: "room.archive", entityType: "room", entityId: room.id } });
@@ -99,5 +97,5 @@ roomsRouter.post("/:id/archive", requireAuth, requireRole("ADMIN"), async (req, 
 });
 
 roomsRouter.delete("/:id", requireAuth, requireRole("ADMIN"), (_req, res) => {
-  res.status(400).json({ error: "Rooms are archived, not deleted, to preserve reservation history" });
+  res.status(400).json({ error: "Rooms are archived, not deleted, to preserve schedule history" });
 });

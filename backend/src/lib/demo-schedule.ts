@@ -3,7 +3,6 @@ import { overlaps } from "./time.js";
 export interface DemoRoom {
   id: string;
   code: string;
-  roomType: string;
 }
 
 export interface DemoRow {
@@ -34,8 +33,8 @@ const COUNT_WEIGHTS: Array<[count: number, weight: number]> = [
   [5, 0.15], [6, 0.11], [7, 0.09], [8, 0.07], [9, 0.05],
 ];
 
-// Only real class venues get schedules (bridges/AV/stock/others don't).
-const SCHEDULABLE = new Set(["classroom", "laboratory", "smart"]);
+// Every active room is a schedulable venue: there is no room-type data, so
+// the generator treats the whole catalog uniformly.
 
 function hashCode(s: string): number {
   return [...s].reduce((a, c) => ((a * 31 + c.charCodeAt(0)) | 0), 7);
@@ -69,7 +68,6 @@ export function generateDemoSchedules(
 ): DemoRow[] {
   const rows: DemoRow[] = [];
   for (const room of rooms) {
-    if (!SCHEDULABLE.has(room.roomType)) continue;
     for (const weekday of weekdays) {
       const rand = mulberry(hashCode(`${room.id}:${termId}:${weekday}`));
       let k = drawCount(rand);

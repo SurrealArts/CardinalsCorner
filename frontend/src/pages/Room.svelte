@@ -23,6 +23,34 @@
   let cells = $state<Record<number, Record<number, Cell | "busy">>>({});
   let error = $state("");
 
+  // Present moment in Philippine time (schedules live in Asia/Manila).
+  // Refreshed every 30s so the highlight tracks without a reload.
+  const WD_MAP: Record<string, number> = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  let nowTick = $state(Date.now());
+  $effect(() => {
+    const t = setInterval(() => (nowTick = Date.now()), 30000);
+    return () => clearInterval(t);
+  });
+  function manilaParts(ts: number) {
+    try {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: "Asia/Manila", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+      }).formatToParts(new Date(ts));
+      const get = (ty: string) => parts.find((p) => p.type === ty)?.value ?? "";
+      return { wd: WD_MAP[get("weekday")] ?? -1, min: Number(get("hour")) * 60 + Number(get("minute")) };
+    } catch {
+      return { wd: -1, min: -1 };
+    }
+  }
+  let nowInfo = $derived(manilaParts(nowTick));
+  // Grid row containing the present minute (-1 when outside class hours).
+  let nowRow = $derived.by(() => {
+    for (let i = 0; i + 1 < grid.length; i++) {
+      if (nowInfo.min >= grid[i] && nowInfo.min < grid[i + 1]) return i;
+    }
+    return -1;
+  });
+
   function pickDefaultTerm(list: any[]) {
     const today = new Date().toISOString().slice(0, 10);
     const current = list.find((t) => t.startDate.slice(0, 10) <= today && today <= t.endDate.slice(0, 10));
@@ -84,7 +112,7 @@
   <div class="card">
     <h1>{room.code}</h1>
     <p class="muted">
-      {room.wing} · {room.roomType}{room.description ? ` · ${room.description}` : ""}{term
+      {room.wing}{room.description ? ` · ${room.description}` : ""}{term
         ? ` · ${term.name} (${term.periodMin}-min periods)`
         : ""}
     </p>
@@ -110,19 +138,22 @@
       <p class="muted">No classes scheduled this term.</p>
     {:else}
       <table class="ttable">
-        <thead><tr><th class="timecol">Time</th>{#each DAYS as d}<th>{d}</th>{/each}</tr></thead>
+        <thead><tr><th class="timecol">Time</th>{#each DAYS as d, di}<th class={ORDER[di] === nowInfo.wd ? "nowcol" : ""}>{d}</th>{/each}</tr></thead>
         <tbody>
           {#each grid.slice(0, -1) as start, i}
             {@const end = grid[i + 1]}
             {@const h = Math.max(30, Math.round((end - start) * 0.55))}
-            <tr style={`height:${h}px`}>
-              <td class="timecol muted">{toHHMM(grid[i])}–{toHHMM(end)}</td>
+            {@const isNowRow = i === nowRow}
+            <tr style={`height:${h}px`} class={isNowRow ? "nowrow" : ""}>
+              <td class="timecol muted">{toHHMM(grid[i])}–{toHHMM(end)}{#if isNowRow} <span class="nowchip">now</span>{/if}</td>
               {#each ORDER as wd}
                 {@const cell = cells[wd]?.[i]}
+                {@const isNowCol = wd === nowInfo.wd}
+                {@const cls = isNowCol && isNowRow ? "nowcol nowcore" : isNowCol ? "nowcol" : ""}
                 {#if cell === "busy"}{:else if cell}
-                  <td rowspan={cell.span}><strong>{cell.cls.course} {cell.cls.section}</strong><br /><span class="muted">{cell.cls.professor}</span></td>
+                  <td rowspan={cell.span} class={cls}><strong>{cell.cls.course} {cell.cls.section}</strong><br /><span class="muted">{cell.cls.professor}</span></td>
                 {:else}
-                  <td></td>
+                  <td class={cls}></td>
                 {/if}
               {/each}
             </tr>
@@ -157,5 +188,38 @@
   }
   .timescroll :global(.timecol) {
     width: 110px;
+  }
+  /* Present-moment highlight, calendar-style: soft highlighter wash over
+     today's column and the current time row, gold rules enclosing both,
+     and a deeper tint + "now" chip where they intersect. Kept pale. */
+  .timescroll :global(.ttable th.nowcol),
+  .timescroll :global(.ttable td.nowcol) {
+    background: var(--now-wash);
+    border-left: 2px solid var(--now-line);
+    border-right: 2px solid var(--now-line);
+  }
+  .timescroll :global(.ttable th.nowcol) {
+    border-top: 2px solid var(--now-line);
+  }
+  .timescroll :global(.ttable tr.nowrow > td) {
+    background: var(--now-wash);
+    border-top: 1px solid var(--now-line);
+    border-bottom: 1px solid var(--now-line);
+  }
+  .timescroll :global(.ttable td.nowcore) {
+    background: var(--now-core);
+    box-shadow: inset 0 0 0 2px var(--now-line);
+  }
+  .timescroll :global(.nowchip) {
+    display: inline-block;
+    font-size: 0.68rem;
+    font-weight: 800;
+    letter-spacing: 0.05em;
+    background: var(--now-line);
+    color: #222;
+    border-radius: 999px;
+    padding: 0.1rem 0.45rem;
+    margin-left: 0.35rem;
+    vertical-align: middle;
   }
 </style>

@@ -2,18 +2,18 @@ import { describe, expect, it } from "vitest";
 import { excludeOverlapping, generateDemoSchedules } from "./demo-schedule.js";
 
 const rooms = [
-  { id: "r1", code: "SW305", roomType: "classroom" },
-  { id: "r2", code: "AV-1", roomType: "av" },
-  { id: "r3", code: "SR1", roomType: "stock" },
+  { id: "r1", code: "SW305" },
+  { id: "r2", code: "AV-1" },
+  { id: "r3", code: "SR1" },
 ];
 
 describe("generateDemoSchedules", () => {
-  it("is deterministic and skips non-class venues", () => {
+  it("is deterministic across every room", () => {
     const a = generateDemoSchedules(rooms, "t1");
     const b = generateDemoSchedules(rooms, "t1");
     expect(a).toEqual(b);
     expect(a.length).toBeGreaterThan(0);
-    expect(a.every((r) => r.roomId === "r1")).toBe(true);
+    expect(new Set(a.map((r) => r.roomId))).toEqual(new Set(["r1", "r2", "r3"]));
   });
   it("stays in bounds with no same-day overlaps", () => {
     const rows = generateDemoSchedules(rooms, "t1");

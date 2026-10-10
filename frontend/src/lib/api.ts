@@ -33,7 +33,6 @@ export interface Room {
   id: string;
   code: string;
   wing: string;
-  roomType: string;
   openMin: number;
   closeMin: number;
   status: string;
@@ -49,6 +48,9 @@ export interface RoomVacancy {
   nextVacant: { startMin: number; endMin: number } | null;
   longestFreeMin: number;
   freeMinutesTotal: number;
+  currentBlockEndMin: number | null;
+  freeAllDay: boolean;
+  freeFromNowMin: number;
 }
 
 export const toMin = (hhmm: string): number => {

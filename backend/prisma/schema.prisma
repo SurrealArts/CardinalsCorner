@@ -39,9 +39,8 @@ model Room {
   code        String     @unique // e.g. SW305, AV-1, Smart Classroom 1
   campus      String     @default("Intramuros")
   wing        String // S, SW, W, N, NW, NB, SB, AV, SMART, OTHER
-  roomType    String     @default("classroom") // classroom | laboratory | office | av | smart | stock | bridge | other
   openMin     Int        @default(480) // operating hours, minutes since midnight (07:00)
-  closeMin    Int        @default(1170) // 19:30
+  closeMin    Int        @default(1260) // 21:00
   status      RoomStatus @default(ACTIVE)
   description String?
   createdAt   DateTime   @default(now())

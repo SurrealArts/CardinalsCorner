@@ -7,44 +7,28 @@ import groups from "./rooms.source.json" with { type: "json" };
 // Seed: one invisible admin + reference term + sample class schedules in the
 // current format (course / section / professor). No demo users, no reservations.
 
-function rng(seed: number) {
-  return () => {
-    seed |= 0;
-    seed = (seed + 0x6d2b79f5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-const hashCode = (s: string) =>
-  [...s].reduce((a, c) => ((a * 31 + c.charCodeAt(0)) | 0), 7);
-
-type RoomSeed = { code: string; wing: string; roomType: string; description: string };
+type RoomSeed = { code: string; wing: string; description: string };
 
 function buildRooms(): RoomSeed[] {
   const out: RoomSeed[] = [];
-  const push = (code: string, wing: string, roomType: string, description: string) =>
-    out.push({ code, wing, roomType, description });
+  const push = (code: string, wing: string, description: string) =>
+    out.push({ code, wing, description });
   const g = groups as Record<string, string[]>;
   const wingDesc: Record<string, string> = {
     S: "South wing", SW: "Southwest wing", W: "West wing", N: "North wing", NW: "Northwest wing",
   };
   for (const wing of ["S", "SW", "W", "N", "NW"]) {
     for (const code of g[wing] ?? []) {
-      const r = rng(hashCode(code));
       const m = code.match(/^[A-Z]+(\d)/);
       const floor = m ? Number(m[1]) : 1;
-      push(code, wing, r() < 0.18 ? "laboratory" : "classroom", `${wingDesc[wing]}, floor ${floor}`);
+      push(code, wing, `${wingDesc[wing]}, floor ${floor}`);
     }
   }
-  for (const code of g["North Bridge"] ?? []) push(code, "NB", "bridge", "North Bridge, second floor");
-  for (const code of g["South Bridge"] ?? []) push(code, "SB", "bridge", "South Bridge, second floor");
-  for (const code of g["Audio Visual rooms"] ?? []) push(code, "AV", "av", "Audio Visual room, commonly booked for org events");
-  for (const code of g["Smart classrooms"] ?? []) push(code, "SMART", "smart", "Smart classroom");
-  for (const code of g["Other coded rooms"] ?? []) {
-    const t = code.startsWith("SR") ? "stock" : "other";
-    push(code, "OTHER", t, "Special-purpose room");
-  }
+  for (const code of g["North Bridge"] ?? []) push(code, "NB", "North Bridge, second floor");
+  for (const code of g["South Bridge"] ?? []) push(code, "SB", "South Bridge, second floor");
+  for (const code of g["Audio Visual rooms"] ?? []) push(code, "AV", "Audio-visual block");
+  for (const code of g["Smart classrooms"] ?? []) push(code, "SMART", "Smart classroom block");
+  for (const code of g["Other coded rooms"] ?? []) push(code, "OTHER", "Special-purpose room");
   return out;
 }
 
@@ -73,8 +57,8 @@ async function main() {
   for (const r of rooms) {
     await prisma.room.upsert({
       where: { code: r.code },
-      update: { wing: r.wing, roomType: r.roomType, description: r.description, status: "ACTIVE" },
-      create: { ...r, campus: "Intramuros" },
+      update: { wing: r.wing, description: r.description, status: "ACTIVE" },
+      create: { ...r, campus: "Intramuros", openMin: 480, closeMin: 1260 },
     });
   }
 
@@ -83,7 +67,7 @@ async function main() {
   await prisma.classSchedule.deleteMany({ where: { termId: term.id } });
   const dbRooms = await prisma.room.findMany({
     where: { status: "ACTIVE" },
-    select: { id: true, code: true, roomType: true },
+    select: { id: true, code: true },
   });
   const demoRows = generateDemoSchedules(dbRooms, term.id);
   for (let i = 0; i < demoRows.length; i += 500) {

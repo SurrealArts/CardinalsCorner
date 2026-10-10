@@ -19,23 +19,40 @@ const schedSchema = z.object({
   end: z.union([z.number().int(), z.string()]),
 });
 
-// Public schedule catalog (filter by room, term, weekday, course, professor).
+// Public schedule catalog (filter by room, term, weekday, course, professor, search).
 schedulesRouter.get("/", async (req, res) => {
-  const { roomId, termId, weekday, course, professor } = req.query as Record<string, string>;
-  res.json(
-    await prisma.classSchedule.findMany({
-      where: {
-        roomId: roomId || undefined,
-        termId: termId || undefined,
-        weekday: weekday !== undefined && weekday !== "" ? Number(weekday) : undefined,
-        course: course ? { contains: course.toUpperCase() } : undefined,
-        professor: professor ? { contains: professor } : undefined,
-      },
+  const { roomId, termId, weekday, course, professor, search, page = "1", limit = "50" } = req.query as Record<string, string>;
+  const pageNum = Math.max(1, Number(page) || 1);
+  const limitNum = Math.min(100, Math.max(1, Number(limit) || 50));
+  const searchQ = search?.trim();
+  const where = {
+    roomId: roomId || undefined,
+    termId: termId || undefined,
+    weekday: weekday !== undefined && weekday !== "" ? Number(weekday) : undefined,
+    course: course ? { contains: course.toUpperCase() } : undefined,
+    professor: professor ? { contains: professor } : undefined,
+    ...(searchQ
+      ? {
+          OR: [
+            { course: { contains: searchQ.toUpperCase() } },
+            { section: { contains: searchQ.toUpperCase() } },
+            { professor: { contains: searchQ } },
+            { room: { code: { contains: searchQ.toUpperCase() } } },
+          ],
+        }
+      : {}),
+  };
+  const [total, items] = await Promise.all([
+    prisma.classSchedule.count({ where }),
+    prisma.classSchedule.findMany({
+      where,
       include: { room: { select: { code: true } }, term: { select: { name: true } } },
       orderBy: [{ weekday: "asc" }, { startMin: "asc" }],
-      take: 1000,
-    })
-  );
+      skip: (pageNum - 1) * limitNum,
+      take: limitNum,
+    }),
+  ]);
+  res.json({ total, page: pageNum, limit: limitNum, items });
 });
 
 async function resolveRoomTerm(roomCode: string, termName: string) {

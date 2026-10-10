@@ -16,9 +16,14 @@
   let newTerm = $state({ name: "", startDate: "", endDate: "", periodMin: 90, dayStartMin: "07:30", dayEndMin: "21:00" });
   let editingTermId = $state("");
   let termFilter = $state("");
-  let schedules = $state<any[]>([]);
   let csv = $state("room_code,course,section,professor,weekday,start,end,term_name\nSW305,ECEA101,B14,\"Dela Cruz, J.\",Tue,13:00,14:30,1T-2026-2027");
   let importResult = $state("");
+
+  let schedSearch = $state("");
+  let schedPage = $state(1);
+  const SCHED_LIMIT = 50;
+  let schedTotal = $state(0);
+  let schedules = $state<any[]>([]);
 
   let users = $state<any[]>([]);
   let resettingId = $state("");
@@ -61,18 +66,48 @@
     try {
       terms = await api<any[]>("/terms");
     } catch {
-      // Session dead (expired/revoked elsewhere): fall back to sign-in form.
       user = null;
       return;
     }
     if (!termFilter && terms[0]) termFilter = terms[0].id;
-    if (termFilter) schedules = await api<any[]>(`/schedules?termId=${termFilter}`).catch(() => []);
+    await loadSchedules();
     if (user?.role === "ADMIN") await loadUsers();
   }
 
+  async function loadSchedules() {
+    if (!termFilter) { schedules = []; schedTotal = 0; return; }
+    try {
+      const q = new URLSearchParams({ termId: termFilter, page: String(schedPage), limit: String(SCHED_LIMIT) });
+      if (schedSearch.trim()) q.set("search", schedSearch.trim());
+      const r = await api<{ total: number; items: any[] }>(`/schedules?${q}`);
+      schedules = r.items;
+      schedTotal = r.total;
+    } catch {
+      schedules = [];
+      schedTotal = 0;
+    }
+  }
+
+  const schedPages = $state({ from: 0, to: 0, total: 0, max: 0 });
+
+  async function schedGo(page: number) {
+    schedPage = page;
+    await loadSchedules();
+    syncSchedMeta();
+  }
+  function syncSchedMeta() {
+    const pages = Math.max(1, Math.ceil(schedTotal / SCHED_LIMIT));
+    schedPages.total = schedTotal;
+    schedPages.max = pages;
+    const window = 4;
+    const from = Math.max(1, Math.min(schedPage - window, pages - window * 2));
+    schedPages.from = Math.min(schedPage - 2, from);
+    schedPages.to = Math.min(schedPage + 2, pages);
+  }
+  $effect(() => { syncSchedMeta(); });
+
   async function handleError(e: unknown) {
     error = (e as Error).message;
-    // A 401 here means the admin session died mid-use: show sign-in again.
     await session.refresh();
     user = session.user;
   }
@@ -161,7 +196,8 @@
     error = "";
     try {
       await api(`/schedules/${id}`, { method: "DELETE" });
-      await refreshAll();
+      await loadSchedules();
+      syncSchedMeta();
     } catch (e) {
       await handleError(e);
     }
@@ -213,13 +249,27 @@
 
   <div class="card">
     <h2>Terms</h2>
+    <table>
+      <thead><tr><th>Name</th><th>Start</th><th>End</th><th>Period</th><th>Day start</th><th>Day end</th></tr></thead>
+      <tbody>
+        {#each terms as t}
+          <tr>
+            <td><strong>{t.name}</strong></td>
+            <td>{t.startDate.slice(0, 10)}</td>
+            <td>{t.endDate.slice(0, 10)}</td>
+            <td>{t.periodMin} min</td>
+            <td>{toHHMM(t.dayStartMin)}</td>
+            <td>{toHHMM(t.dayEndMin)}</td>
+          </tr>
+        {/each}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2>{editingTermId ? "Edit term" : "New term"}</h2>
     <div class="row">
-      <div class="field"><label for="a-term">Current term</label>
-        <select id="a-term" bind:value={termFilter} onchange={refreshAll}>
-          {#each terms as t}<option value={t.id}>{t.name}</option>{/each}
-        </select>
-      </div>
-      <div class="field"><label for="a-tname">New term (1T-2026-2027)</label><input id="a-tname" bind:value={newTerm.name} placeholder="2T-2026-2027" /></div>
+      <div class="field"><label for="a-tname">Name</label><input id="a-tname" bind:value={newTerm.name} placeholder="2T-2026-2027" /></div>
       <div class="field"><label for="a-tfrom">Starts</label><input id="a-tfrom" type="date" bind:value={newTerm.startDate} /></div>
       <div class="field"><label for="a-tto">Ends</label><input id="a-tto" type="date" bind:value={newTerm.endDate} /></div>
       <div class="field"><label for="a-period">Period (min)</label><input id="a-period" type="number" min="20" max="240" bind:value={newTerm.periodMin} /></div>
@@ -231,6 +281,13 @@
           {#if editingTermId}<button class="ghost" onclick={cancelEdit}>Cancel</button>
           {:else}<button class="ghost" onclick={editSelected}>Edit selected</button>{/if}
         </span>
+      </div>
+    </div>
+    <div class="row" style="margin-top:.8rem">
+      <div class="field"><label for="a-term">Working term</label>
+        <select id="a-term" bind:value={termFilter} onchange={async () => { schedPage = 1; await refreshAll(); }}>
+          {#each terms as t}<option value={t.id}>{t.name}</option>{/each}
+        </select>
       </div>
     </div>
   </div>
@@ -248,22 +305,37 @@
   </div>
 
   <div class="card">
-    <h2>Schedules in term ({schedules.length})</h2>
+    <h2>Schedules in term ({schedTotal})</h2>
+    <div class="row">
+      <div class="field"><label for="s-search">Search</label>
+        <input id="s-search" bind:value={schedSearch} placeholder="Course, section, professor, room…" onchange={async () => { schedPage = 1; await loadSchedules(); syncSchedMeta(); }} />
+      </div>
+    </div>
     <table>
       <thead><tr><th>Room</th><th>Day</th><th>Time</th><th>Course</th><th>Professor</th><th></th></tr></thead>
       <tbody>
-        {#each schedules.slice(0, 100) as s}
+        {#each schedules as s}
           <tr>
             <td>{s.room?.code}</td>
             <td>{["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][s.weekday]}</td>
-            <td>{s.startMin}–{s.endMin}</td>
+            <td>{toHHMM(s.startMin)}–{toHHMM(s.endMin)}</td>
             <td>{s.course} {s.section}</td>
             <td>{s.professor}</td>
             <td><button class="ghost" onclick={() => removeSchedule(s.id)}>Delete</button></td>
           </tr>
         {/each}
+        {#if schedules.length === 0}
+          <tr><td colspan="6" class="muted">No schedules match.</td></tr>
+        {/if}
       </tbody>
     </table>
+    {#if schedTotal > SCHED_LIMIT}
+      <div class="pager">
+        <button class="ghost" disabled={schedPage <= 1} onclick={() => schedGo(schedPage - 1)}>← Prev</button>
+        <span>Page {schedPage} of {schedPages.max} · {schedTotal} schedules</span>
+        <button class="ghost" disabled={schedPage >= schedPages.max} onclick={() => schedGo(schedPage + 1)}>Next →</button>
+      </div>
+    {/if}
   </div>
 
   <div class="card">
@@ -298,3 +370,19 @@
     </table>
   </div>
 {/if}
+
+<style>
+  .pager {
+    display: flex;
+    align-items: center;
+    gap: 0.8rem;
+    justify-content: center;
+    margin-top: 0.8rem;
+    font-size: 0.85rem;
+    color: var(--slate);
+  }
+  .pager button:disabled {
+    opacity: 0.45;
+    cursor: default;
+  }
+</style>

@@ -1,13 +1,121 @@
-/* Minimal reset — component styles live in App.svelte */
+/* Cardinal's Corner theme.
+ *
+ * Type: JA Jayagiri (licensed, paid) for headings — drop the licensed
+ * WOFF2/OTF files into src/assets/fonts/ and uncomment the @font-face
+ * below; until then headings fall back to Baloo 2, the closest free
+ * rounded-bold display face. Subheading/body is Helvetica Neue.
+ */
+
+/* @font-face {
+  font-family: "JA Jayagiri";
+  src: url("./assets/fonts/ja-jayagiri-sans.woff2") format("woff2");
+  font-weight: 400 800;
+  font-display: swap;
+} */
+
+:root {
+  color-scheme: light;
+  --brand: #da3022;
+  --brand-dark: #b3261a;
+  --gold: #fbc638;
+  --slate: #54565b;
+  --mist: #a2aaad;
+  --ink: #222222;
+  --bg: #fdfcfa;
+  --card: #ffffff;
+  --surface-2: #fffdf9;
+  --line: #ece7e3;
+  --hover: #fbeae8;
+  --input-bg: #ffffff;
+  --error-bg: #fdecea;
+  --error-line: #f5c6c1;
+  --chip: #e9e6e3;
+  --occupied: #c2410c;
+  --vacant: #15803d;
+  --now-wash: rgba(217, 164, 22, 0.14);
+  --now-line: #c9971a;
+  --now-core: rgba(217, 164, 22, 0.3);
+  --heading: "JA Jayagiri", "Baloo 2", "Arial Rounded MT Bold", system-ui, sans-serif;
+  --body: "Helvetica Neue", Helvetica, Arial, system-ui, sans-serif;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+  --ink: #f4edeb;
+  --slate: #b7aca6;
+  --bg: #171313;
+  --card: #221d1d;
+  --surface-2: #282222;
+  --line: #3b3232;
+  --hover: #3a2422;
+  --input-bg: #2b2525;
+  --error-bg: #3a2321;
+  --error-line: #7a3a34;
+  --chip: #3b3232;
+  --occupied: #e8763a;
+  --vacant: #2ea44f;
+  --now-wash: rgba(251, 198, 56, 0.1);
+  --now-line: #a8842c;
+  --now-core: rgba(251, 198, 56, 0.22);
+}
+
 * {
   box-sizing: border-box;
 }
-a {
-  color: #c8102e;
+
+body {
+  margin: 0;
+  font-family: var(--body);
+  background: var(--bg);
+  color: var(--ink);
 }
+
+/* Gentle color-only morph between themes: surfaces re-tint in place,
+   never fading elements in or out. */
+body,
+header,
+form,
+div,
+section,
+i,
+a,
+button,
+input,
+select,
+textarea,
+table,
+th,
+td,
+span,
+strong,
+p,
+h1,
+h2,
+h3 {
+  transition:
+    background-color 0.35s ease,
+    color 0.35s ease,
+    border-color 0.35s ease,
+    box-shadow 0.35s ease;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--heading);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  margin: 0 0 0.4rem;
+}
+
+a {
+  color: var(--brand);
+}
+
 pre {
   white-space: pre-wrap;
-  background: #f4f0ef;
+  background: var(--hover);
+  color: var(--ink);
   padding: 0.6rem;
   border-radius: 8px;
 }

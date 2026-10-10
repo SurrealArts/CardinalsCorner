@@ -18,6 +18,9 @@ export interface VacancySummary {
   nextVacant: FreeBlock | null;
   longestFreeMin: number;
   freeMinutesTotal: number;
+  currentBlockEndMin: number | null;
+  freeAllDay: boolean;
+  freeFromNowMin: number;
 }
 
 // Merge overlapping or boundary-touching intervals (continuous occupation).
@@ -59,7 +62,28 @@ export function summarize(free: FreeBlock[], atMin: number, dayEnd: number): Vac
   const nextVacant = upcoming[0] ?? null;
   const longestFreeMin = after.reduce((m, f) => Math.max(m, f.endMin - f.startMin), 0);
   const freeMinutesTotal = free.reduce((a, f) => a + (f.endMin - f.startMin), 0);
-  return { nowFree, freeBlocks: free, nextVacant, longestFreeMin, freeMinutesTotal };
+  return {
+    nowFree,
+    freeBlocks: free,
+    nextVacant,
+    longestFreeMin,
+    freeMinutesTotal,
+    currentBlockEndMin: null,
+    freeAllDay: false,
+    freeFromNowMin: 0,
+  };
+}
+
+// End of the block (vacant or occupied) containing atMin — powers
+// "Vacant until…" / "Occupied until…" on room cards.
+export function currentBlockEnd(
+  free: FreeBlock[],
+  occupied: FreeBlock[],
+  atMin: number
+): number | null {
+  const inBlock = (ivs: FreeBlock[]) =>
+    ivs.find((iv) => iv.startMin <= atMin && atMin < iv.endMin)?.endMin ?? null;
+  return inBlock(free) ?? inBlock(occupied) ?? null;
 }
 
 export function qualifies(summary: VacancySummary, minFreeMin: number): boolean {
@@ -133,7 +157,11 @@ export async function vacancyForRooms(
     const free = subtractBounds(open, close, mergeIntervals(occupied));
     const summary = summarize(free, atMin, close);
     if (!qualifies(summary, minFreeMin)) continue;
-    out.push({ roomId, code: room.code, wing: room.wing, ...summary });
+    const freeAllDay = free.length === 1 && free[0].startMin <= open && free[0].endMin >= close;
+    const freeFromNowMin = summary.nowFree && summary.currentBlockEndMin != null
+      ? Math.max(0, summary.currentBlockEndMin - atMin)
+      : 0;
+    out.push({ roomId, code: room.code, wing: room.wing, ...summary, currentBlockEndMin: currentBlockEnd(free, occupied, atMin), freeAllDay, freeFromNowMin });
   }
   return out;
 }
@@ -189,7 +217,11 @@ export async function vacancyTally(date: string, at: string | undefined, wing: s
     const free = subtractBounds(open, close, mergeIntervals(occupied));
     const summary = summarize(free, atMin, close);
     if (!qualifies(summary, minFreeMin)) continue;
-    out.push({ roomId: room.id, code: room.code, wing: room.wing, ...summary });
+    const freeAllDay = free.length === 1 && free[0].startMin <= open && free[0].endMin >= close;
+    const freeFromNowMin = summary.nowFree && summary.currentBlockEndMin != null
+      ? Math.max(0, summary.currentBlockEndMin - atMin)
+      : 0;
+    out.push({ roomId: room.id, code: room.code, wing: room.wing, ...summary, currentBlockEndMin: currentBlockEnd(free, occupied, atMin), freeAllDay, freeFromNowMin });
   }
   return {
     date,

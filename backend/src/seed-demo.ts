@@ -34,7 +34,7 @@ async function main() {
 
   const rooms = await prisma.room.findMany({
     where: { status: "ACTIVE" },
-    select: { id: true, code: true, roomType: true },
+    select: { id: true, code: true },
   });
   let rows = generateDemoSchedules(rooms, term.id);
   if (process.env.SEED_DEMO_WIPE !== "1") {
@@ -61,9 +61,9 @@ async function main() {
     occMin += (d._sum.endMin ?? 0) - (d._sum.startMin ?? 0);
     n += d._count;
   }
-  const schedulableRooms = rooms.filter((r) => ["classroom", "laboratory", "smart"].includes(r.roomType)).length;
-  const windowMin = 810 * 6 * Math.max(schedulableRooms, 1);
-  console.log(`Seeded ${n} demo schedules in ${term.name} across ${schedulableRooms} rooms.`);
+  const roomCount = rooms.length;
+  const windowMin = 810 * 6 * Math.max(roomCount, 1);
+  console.log(`Seeded ${n} demo schedules in ${term.name} across ${roomCount} rooms.`);
   console.log(`Occupancy ≈ ${Math.round((100 * occMin) / windowMin)}% of the Mon-Sat 07:30-21:00 window.`);
 }
 
