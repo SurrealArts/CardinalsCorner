@@ -2,22 +2,18 @@
   import Router from "svelte-spa-router";
   import { onMount } from "svelte";
   import { session } from "./lib/session";
-  import Login from "./pages/Login.svelte";
   import Dashboard from "./pages/Dashboard.svelte";
-  import Reserve from "./pages/Reserve.svelte";
-  import Records from "./pages/Records.svelte";
-  import Reports from "./pages/Reports.svelte";
-  import Profile from "./pages/Profile.svelte";
-  import SyncLab from "./pages/SyncLab.svelte";
+  import Tally from "./pages/Tally.svelte";
+  import Room from "./pages/Room.svelte";
+  import Admin from "./pages/Admin.svelte";
 
+  // Public catalog. The admin page is intentionally unlinked (no nav entry):
+  // it is the single invisible backend auth for schedule maintenance.
   const routes = {
     "/": Dashboard,
-    "/login": Login,
-    "/reserve": Reserve,
-    "/records": Records,
-    "/reports": Reports,
-    "/profile": Profile,
-    "/sync-lab": SyncLab,
+    "/tally": Tally,
+    "/room/:id": Room,
+    "/admin": Admin,
   };
 
   let user = $state(session.user);
@@ -36,23 +32,16 @@
 <header class="topbar">
   <a class="brand" href="#/">♦ Cardinal's Corner</a>
   <nav>
+    <a href="#/">Schedules</a>
+    <a href="#/tally">Vacancy tally</a>
     {#if user}
-      <a href="#/">Dashboard</a>
-      <a href="#/reserve">Reserve</a>
-      {#if user.role === "ADMIN"}
-        <a href="#/records">Records</a>
-        <a href="#/reports">Reports</a>
-        <a href="#/sync-lab">Sync Lab</a>
-      {/if}
-      <a href="#/profile">{user.name} ({user.role})</a>
+      <a href="#/admin">{user.name} ({user.role})</a>
       <button
         onclick={() => {
           session.logout();
-          location.hash = "#/login";
+          location.hash = "#/";
         }}>Sign out</button
       >
-    {:else}
-      <a href="#/login">Sign in</a>
     {/if}
   </nav>
 </header>

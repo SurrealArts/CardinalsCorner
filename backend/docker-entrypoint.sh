@@ -7,5 +7,8 @@ set -eu
 export DATABASE_URL="${DATABASE_URL:-file:/data/cardinals-corner.db}"
 # NOTE: `pnpm --filter backend exec` runs inside backend/, so the schema path
 # must be absolute. Apply pending migrations, then start the server.
-pnpm --filter backend exec prisma migrate deploy --schema /app/backend/prisma/schema.prisma
+# No migration history in this project (schema.prisma is the source of truth):
+# push the schema, accepting data loss on structural changes. Schedule data is
+# re-importable reference data (CSV import), so a fresh table beats a stale one.
+pnpm --filter backend exec prisma db push --accept-data-loss --schema /app/backend/prisma/schema.prisma
 exec node backend/dist/server.js

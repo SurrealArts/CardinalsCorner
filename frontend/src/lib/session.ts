@@ -12,6 +12,16 @@ let user: SessionUser | null = null;
 const listeners = new Set<() => void>();
 const notify = () => listeners.forEach((fn) => fn());
 
+  async function dropLegacyToken() {
+  try {
+    localStorage.removeItem("cc_token");
+  } catch {
+    /* private mode */
+  }
+}
+
+dropLegacyToken();
+
 export const session = {
   get user() {
     return user;
@@ -32,11 +42,13 @@ export const session = {
     return user;
   },
   async login(email: string, password: string) {
+    // The server authenticates via httpOnly cookie; the response token is for
+    // API clients only and is deliberately NOT stored in the browser.
     const res = await api<{ user: SessionUser; token: string }>("/auth/login", {
       method: "POST",
       body: JSON.stringify({ email, password }),
     });
-    localStorage.setItem("cc_token", res.token);
+    dropLegacyToken();
     user = res.user;
     notify();
     return user;
@@ -47,7 +59,7 @@ export const session = {
     } catch {
       /* ignore */
     }
-    localStorage.removeItem("cc_token");
+    dropLegacyToken();
     user = null;
     notify();
   },

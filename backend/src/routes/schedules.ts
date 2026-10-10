@@ -3,97 +3,154 @@ import { z } from "zod";
 import { parse } from "csv-parse/sync";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireRole } from "../lib/auth.js";
-import { hhmmToMinutes, isValidInterval } from "../lib/time.js";
+import { hasOverlap, validateScheduleRow } from "../lib/schedule-validate.js";
 
 export const schedulesRouter = Router();
 export const closuresRouter = Router();
 
 const schedSchema = z.object({
-  roomId: z.string().min(1),
-  termId: z.string().min(1),
-  courseLabel: z.string().min(1),
-  weekday: z.number().int().min(0).max(6),
-  startMin: z.number().int().min(0).max(1440),
-  endMin: z.number().int().min(0).max(1440),
+  roomCode: z.string().min(1),
+  termName: z.string().min(1),
+  course: z.string().min(1),
+  section: z.string().min(1),
+  professor: z.string().min(1),
+  weekday: z.union([z.number().int().min(0).max(6), z.string()]),
+  start: z.union([z.number().int(), z.string()]),
+  end: z.union([z.number().int(), z.string()]),
 });
 
-schedulesRouter.get("/", requireAuth, async (req, res) => {
-  const { roomId, termId, weekday } = req.query as Record<string, string>;
+// Public schedule catalog (filter by room, term, weekday, course, professor).
+schedulesRouter.get("/", async (req, res) => {
+  const { roomId, termId, weekday, course, professor } = req.query as Record<string, string>;
   res.json(
     await prisma.classSchedule.findMany({
-      where: { roomId: roomId || undefined, termId: termId || undefined, weekday: weekday !== undefined && weekday !== "" ? Number(weekday) : undefined },
+      where: {
+        roomId: roomId || undefined,
+        termId: termId || undefined,
+        weekday: weekday !== undefined && weekday !== "" ? Number(weekday) : undefined,
+        course: course ? { contains: course.toUpperCase() } : undefined,
+        professor: professor ? { contains: professor } : undefined,
+      },
       include: { room: { select: { code: true } }, term: { select: { name: true } } },
       orderBy: [{ weekday: "asc" }, { startMin: "asc" }],
-      take: 500,
+      take: 1000,
     })
   );
 });
 
+async function resolveRoomTerm(roomCode: string, termName: string) {
+  const room = await prisma.room.findUnique({ where: { code: roomCode } });
+  if (!room || room.status !== "ACTIVE") throw new Error(`unknown or archived room_code ${roomCode}`);
+  const term = await prisma.term.findUnique({ where: { name: termName } });
+  if (!term) throw new Error(`unknown term_name ${termName}`);
+  return { room, term };
+}
+
 schedulesRouter.post("/", requireAuth, requireRole("ADMIN"), async (req, res) => {
   const parsed = schedSchema.safeParse(req.body);
-  if (!parsed.success || !isValidInterval(parsed.data.startMin, parsed.data.endMin)) {
-    return res.status(400).json({ error: "roomId, termId, course label, weekday, and valid start/end are required" });
+  if (!parsed.success) {
+    return res.status(400).json({ error: "roomCode, termName, course, section, professor, weekday, start, end are required" });
   }
-  const s = await prisma.classSchedule.create({ data: parsed.data });
-  await prisma.activityLog.create({ data: { actorId: req.user!.id, action: "schedule.create", entityType: "schedule", entityId: s.id, detail: JSON.stringify(parsed.data) } });
-  res.status(201).json(s);
+  const raw = {
+    room_code: parsed.data.roomCode, term_name: parsed.data.termName,
+    course: parsed.data.course, section: parsed.data.section, professor: parsed.data.professor,
+    weekday: String(parsed.data.weekday), start: String(parsed.data.start), end: String(parsed.data.end),
+  };
+  try {
+    const { room, term } = await resolveRoomTerm(raw.room_code, raw.term_name);
+    const v = validateScheduleRow(raw, term);
+    if (!v.ok) return res.status(400).json({ error: v.error });
+    const existing = await prisma.classSchedule.findMany({ where: { roomId: room.id, termId: term.id, weekday: v.data.weekday } });
+    if (hasOverlap(v.data, existing)) {
+      return res.status(409).json({ error: `Overlaps an existing ${room.code} class on weekday ${v.data.weekday}` });
+    }
+    const s = await prisma.classSchedule.create({
+      data: { roomId: room.id, termId: term.id, course: v.data.course, section: v.data.section, professor: v.data.professor, weekday: v.data.weekday, startMin: v.data.startMin, endMin: v.data.endMin },
+    });
+    await prisma.activityLog.create({ data: { actorId: req.user!.id, action: "schedule.create", entityType: "schedule", entityId: s.id, detail: JSON.stringify(v.data) } });
+    res.status(201).json({ schedule: s, warnings: v.warnings });
+  } catch (e) {
+    res.status(404).json({ error: (e as Error).message });
+  }
 });
 
-// CSV import: room_code,course_label,weekday,start,end,term_name
-// weekday accepts 0-6 or Mon/Tue/...; start/end accept minutes or HH:MM.
+// CSV import: room_code,course,section,professor,weekday,start,end,term_name
+// Sanitized per row (required fields, code/section patterns, 07:00-21:00,
+// weekday), verified against existing schedules AND within the batch for
+// overlaps. Partial success: valid rows save, bad rows are reported.
 schedulesRouter.post("/import", requireAuth, requireRole("ADMIN"), async (req, res) => {
-  const { csv } = req.body as { csv?: string };
-  if (!csv || typeof csv !== "string") return res.status(400).json({ error: "Provide { csv: string }" });
+  const { csv, termName: defaultTerm } = req.body as { csv?: string; termName?: string };
+  if (!csv || typeof csv !== "string") {
+    return res.status(400).json({ error: "Provide { csv: string } with header room_code,course,section,professor,weekday,start,end,term_name" });
+  }
   let rows: Record<string, string>[];
   try {
     rows = parse(csv, { columns: true, skip_empty_lines: true, trim: true });
   } catch {
-    return res.status(400).json({ error: "Could not parse CSV. Expected header: room_code,course_label,weekday,start,end,term_name" });
+    return res.status(400).json({ error: "Could not parse CSV" });
   }
-  const dayMap: Record<string, number> = { sun: 0, mon: 1, tue: 2, wed: 3, thu: 4, fri: 5, sat: 6 };
   let created = 0;
   const errors: string[] = [];
+  const warnings: string[] = [];
+  const accepted: Array<{ roomId: string; termId: string; weekday: number; startMin: number; endMin: number }> = [];
+  const roomCache = new Map<string, { id: string }>();
+  const termCache = new Map<string, { id: string; periodMin: number; dayStartMin: number; dayEndMin: number }>();
   for (let i = 0; i < rows.length; i++) {
-    const r = rows[i];
+    const label = `row ${i + 2}`;
+    const raw = { ...rows[i] };
+    // Rows may omit term_name when the whole file targets one term (the admin
+    // page sends the selected term as the default).
+    if (!((raw.term_name ?? "").trim()) && defaultTerm) raw.term_name = defaultTerm;
+    const roomCode = (raw.room_code ?? "").trim();
+    const termName = (raw.term_name ?? "").trim();
+    if (!roomCode || !termName) {
+      errors.push(`${label}: room_code and term_name are required`);
+      continue;
+    }
     try {
-      const room = await prisma.room.findUnique({ where: { code: String(r.room_code ?? "").trim() } });
-      if (!room) throw new Error(`unknown room_code ${r.room_code}`);
-      const term = await prisma.term.findUnique({ where: { name: String(r.term_name ?? "").trim() } });
-      if (!term) throw new Error(`unknown term_name ${r.term_name}`);
-      const wdRaw = String(r.weekday ?? "").trim().toLowerCase();
-      const weekday = /^\d$/.test(wdRaw) ? Number(wdRaw) : dayMap[wdRaw.slice(0, 3)];
-      if (weekday === undefined || weekday < 0 || weekday > 6) throw new Error(`bad weekday ${r.weekday}`);
-      const toMin = (v: string) => (/^\d+$/.test(v.trim()) ? Number(v.trim()) : hhmmToMinutes(v));
-      const startMin = toMin(String(r.start ?? ""));
-      const endMin = toMin(String(r.end ?? ""));
-      if (startMin === null || endMin === null || !isValidInterval(startMin, endMin)) throw new Error(`bad interval ${r.start}-${r.end}`);
-      await prisma.classSchedule.create({ data: { roomId: room.id, termId: term.id, courseLabel: String(r.course_label ?? "").trim(), weekday, startMin, endMin } });
+      if (!roomCache.has(roomCode) || !termCache.has(termName)) {
+        const { room, term } = await resolveRoomTerm(roomCode, termName);
+        roomCache.set(roomCode, { id: room.id });
+        termCache.set(termName, { id: term.id, periodMin: term.periodMin, dayStartMin: term.dayStartMin, dayEndMin: term.dayEndMin });
+      }
+      const v = validateScheduleRow(raw, termCache.get(termName)!);
+      if (!v.ok) {
+        errors.push(`${label}: ${v.error}`);
+        continue;
+      }
+      for (const w of v.warnings) warnings.push(`${label}: ${w}`);
+      const d = v.data;
+      const roomId = roomCache.get(d.roomCode)!.id;
+      const termId = termCache.get(d.termName)!.id;
+      const existing = await prisma.classSchedule.findMany({ where: { roomId, termId, weekday: d.weekday } });
+      const batchPeers = accepted
+        .filter((a) => a.roomId === roomId && a.termId === termId && a.weekday === d.weekday)
+        .map((a) => ({ startMin: a.startMin, endMin: a.endMin }));
+      if (hasOverlap(d, [...existing, ...batchPeers])) {
+        errors.push(`${label}: overlaps another ${d.roomCode} class on weekday ${d.weekday}`);
+        continue;
+      }
+      await prisma.classSchedule.create({
+        data: { roomId, termId, course: d.course, section: d.section, professor: d.professor, weekday: d.weekday, startMin: d.startMin, endMin: d.endMin },
+      });
+      accepted.push({ roomId, termId, weekday: d.weekday, startMin: d.startMin, endMin: d.endMin });
       created++;
     } catch (e) {
-      errors.push(`row ${i + 2}: ${(e as Error).message}`);
+      errors.push(`${label}: ${(e as Error).message}`);
     }
   }
-  await prisma.activityLog.create({ data: { actorId: req.user!.id, action: "schedule.import", entityType: "schedule", detail: JSON.stringify({ created, errors: errors.length }) } });
-  res.json({ created, errors });
+  await prisma.activityLog.create({ data: { actorId: req.user!.id, action: "schedule.import", entityType: "schedule", detail: JSON.stringify({ created, errors: errors.length, warnings: warnings.length }) } });
+  res.json({ created, errors, warnings: warnings.slice(0, 20) });
 });
 
 schedulesRouter.delete("/:id", requireAuth, requireRole("ADMIN"), async (req, res) => {
-  // Deleting a schedule that overlaps approved reservations requires explicit force.
-  const s = await prisma.classSchedule.findUniqueOrThrow({ where: { id: req.params.id } });
-  const force = req.query.force === "true";
-  if (!force) {
-    const affected = await prisma.reservation.count({ where: { roomId: s.roomId, status: "APPROVED" } });
-    if (affected > 0) {
-      return res.status(409).json({ error: `This schedule room has ${affected} approved reservation(s). Re-run with ?force=true after resolving them.` });
-    }
-  }
-  await prisma.classSchedule.delete({ where: { id: s.id } });
-  await prisma.activityLog.create({ data: { actorId: req.user!.id, action: "schedule.delete", entityType: "schedule", entityId: s.id } });
+  await prisma.classSchedule.delete({ where: { id: req.params.id } });
+  await prisma.activityLog.create({ data: { actorId: req.user!.id, action: "schedule.delete", entityType: "schedule", entityId: req.params.id } });
   res.json({ ok: true });
 });
 
-// ---- Closures ----
-closuresRouter.get("/", requireAuth, async (req, res) => {
+// ---- Closures (reads public; writes admin) ----
+closuresRouter.get("/", async (req, res) => {
   const { roomId, date } = req.query as Record<string, string>;
   res.json(await prisma.closure.findMany({ where: { roomId: roomId || undefined, date: date || undefined }, orderBy: { date: "asc" }, take: 500 }));
 });

@@ -7,9 +7,7 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// Roles: ADMIN manages everything; STAFF covers Authorized Personnel + Faculty
-// (search/view/compare/request); STUDENT reviews availability and submits/monitors
-// their own reservation requests.
+// Single invisible admin account. No public registration, no requester roles.
 enum Role {
   ADMIN
   STAFF
@@ -19,13 +17,6 @@ enum Role {
 enum RoomStatus {
   ACTIVE
   ARCHIVED
-}
-
-enum ReservationStatus {
-  PENDING
-  APPROVED
-  REJECTED
-  CANCELLED
 }
 
 model User {
@@ -39,9 +30,8 @@ model User {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
-  reservationsRequested Reservation[] @relation("Requester")
-  reservationsReviewed  Reservation[] @relation("Reviewer")
   activityLogs          ActivityLog[]
+  sessions              Session[]
 }
 
 model Room {
@@ -50,7 +40,6 @@ model Room {
   campus      String     @default("Intramuros")
   wing        String // S, SW, W, N, NW, NB, SB, AV, SMART, OTHER
   roomType    String     @default("classroom") // classroom | laboratory | office | av | smart | stock | bridge | other
-  capacity    Int        @default(30)
   openMin     Int        @default(480) // operating hours, minutes since midnight (07:00)
   closeMin    Int        @default(1170) // 19:30
   status      RoomStatus @default(ACTIVE)
@@ -60,29 +49,36 @@ model Room {
 
   classSchedules ClassSchedule[]
   closures       Closure[]
-  reservations   Reservation[]
 }
 
 model Term {
   id        String   @id @default(cuid())
-  name      String   @unique // e.g. 2026-1Q
+  name      String   @unique // NT-YYYY-ZZZZ, e.g. 1T-2026-2027
   startDate DateTime
   endDate   DateTime
+  // Class-period grid for display + linting. The university changes this per
+  // era (50, 70, presently 90 minutes); each term pins its own so old
+  // schedules keep rendering exactly as entered.
+  periodMin   Int @default(90)
+  dayStartMin Int @default(450) // first period starts 07:30
+  dayEndMin   Int @default(1260) // last period ends 21:00
   createdAt DateTime @default(now())
 
   classSchedules ClassSchedule[]
 }
 
 model ClassSchedule {
-  id         String   @id @default(cuid())
-  roomId     String
-  termId     String
-  courseLabel String // course / section label
-  weekday    Int // 0=Sunday .. 6=Saturday (Mon=1 typical)
-  startMin   Int // minutes since midnight
-  endMin     Int
-  createdAt  DateTime @default(now())
-  updatedAt  DateTime @updatedAt
+  id        String @id @default(cuid())
+  roomId    String
+  termId    String
+  course    String // course code, e.g. ECEA101
+  section   String // class section, e.g. A1, B14, E05
+  professor String // instructor name
+  weekday   Int // 0=Sunday .. 6=Saturday (Mon=1 typical)
+  startMin  Int // minutes since midnight (sanitized: 07:00 earliest)
+  endMin    Int // minutes since midnight (sanitized: 21:00 latest)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   room Room @relation(fields: [roomId], references: [id], onDelete: Cascade)
   term Term @relation(fields: [termId], references: [id], onDelete: Cascade)
@@ -104,37 +100,11 @@ model Closure {
   @@index([roomId, date])
 }
 
-model Reservation {
-  id               String            @id @default(cuid())
-  requesterId      String
-  roomId           String
-  date             String // YYYY-MM-DD (Philippine local time)
-  startMin         Int
-  endMin           Int
-  participantCount Int
-  purpose          String
-  status           ReservationStatus @default(PENDING)
-  submittedAt      DateTime          @default(now())
-  reviewerId       String?
-  decidedAt        DateTime?
-  reason           String? // rejection reason / cancellation reason
-  externalSource   String? // Registrar | IT | ILMO | OSAAR | null (set via sync API)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-
-  requester User  @relation("Requester", fields: [requesterId], references: [id])
-  reviewer  User? @relation("Reviewer", fields: [reviewerId], references: [id])
-  room      Room  @relation(fields: [roomId], references: [id])
-
-  @@index([roomId, date, status])
-  @@index([requesterId, status])
-}
-
 model ActivityLog {
   id        String   @id @default(cuid())
   actorId   String?
-  action    String // e.g. reservation.submit, reservation.approve, room.create, sync.upsert
-  entityType String // room | schedule | closure | reservation | user | term | sync
+  action    String // e.g. schedule.create, schedule.import, room.create
+  entityType String // room | schedule | closure | user | term
   entityId  String?
   detail    String? // JSON string
   createdAt DateTime @default(now())
@@ -142,4 +112,22 @@ model ActivityLog {
   actor User? @relation(fields: [actorId], references: [id], onDelete: SetNull)
 
   @@index([entityType, entityId])
+}
+
+// Server-side session allowlist: every issued token carries its row id (jti).
+// Logout, password change, deactivation, or admin revocation marks the row, so
+// stolen/copied tokens stop working instead of living until JWT expiry.
+model Session {
+  id         String    @id // jti from the token
+  userId     String
+  userAgent  String?
+  ip         String?
+  createdAt  DateTime  @default(now())
+  lastSeenAt DateTime  @default(now())
+  expiresAt  DateTime
+  revokedAt  DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

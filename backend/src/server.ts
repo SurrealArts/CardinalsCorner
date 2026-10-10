@@ -8,31 +8,57 @@ import fs from "node:fs";
 import { fileURLToPath } from "node:url";
 import { authRouter, usersRouter } from "./routes/auth.js";
 import { roomsRouter } from "./routes/rooms.js";
-import { availabilityRouter } from "./routes/availability.js";
+import { vacancyRouter } from "./routes/vacancy.js";
 import { closuresRouter, schedulesRouter } from "./routes/schedules.js";
-import { reservationsRouter } from "./routes/reservations.js";
-import { reportsRouter, termsRouter } from "./routes/reports.js";
-import { syncRouter } from "./routes/sync.js";
+import { termsRouter } from "./routes/terms.js";
 import { prisma } from "./lib/prisma.js";
-import { hashPassword } from "./lib/auth.js";
+import { assertJwtSecret, hashPassword } from "./lib/auth.js";
+import { clientIp, createRateLimiter } from "./lib/rate-limit.js";
+
+assertJwtSecret();
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
+app.disable("x-powered-by");
 app.use(express.json({ limit: "2mb" }));
 app.use(cookieParser());
-app.use(cors({ origin: true, credentials: true }));
+
+// Safe baseline headers (no CSP: the SPA serves hashed Vite bundles that a
+// static policy would break on first deploy; revisit if inline scripts appear).
+app.use((_req, res, next) => {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "camera=(), microphone=(), geolocation=()");
+  next();
+});
+
+// Same-origin app: only the dev server needs cross-origin access.
+const corsOrigins = (process.env.CORS_ORIGINS ?? "http://localhost:5173").split(",").map((s) => s.trim()).filter(Boolean);
+app.use(
+  cors({
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true); // same-origin / curl
+      cb(null, corsOrigins.includes(origin));
+    },
+    credentials: true,
+  })
+);
+
+// Generous global guard; login/sync routes get stricter limits below.
+app.use(
+  "/api",
+  createRateLimiter({ windowMs: 60_000, max: 600, key: (req) => clientIp(req), message: "Too many requests, please slow down" })
+);
 
 app.get("/api/health", (_req, res) => res.json({ ok: true, service: "cardinals-corner", time: new Date().toISOString() }));
 app.use("/api/auth", authRouter);
 app.use("/api/users", usersRouter);
 app.use("/api/rooms", roomsRouter);
-app.use("/api/availability", availabilityRouter);
+app.use("/api/vacancy", vacancyRouter);
 app.use("/api/schedules", schedulesRouter);
 app.use("/api/closures", closuresRouter);
-app.use("/api/reservations", reservationsRouter);
 app.use("/api/terms", termsRouter);
-app.use("/api/reports", reportsRouter);
-app.use("/api/sync", syncRouter);
 
 // Unknown API routes -> JSON 404 (keeps SPA fallback from swallowing /api/*).
 app.use("/api", (_req, res) => res.status(404).json({ error: "Not found" }));

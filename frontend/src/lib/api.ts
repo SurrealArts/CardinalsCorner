@@ -1,24 +1,30 @@
 // API base: VITE_API_URL in local dev, relative /api in production (same-origin).
 const BASE = (import.meta.env.VITE_API_URL as string | undefined) ?? "/api";
 
-export function getToken(): string | null {
-  return localStorage.getItem("cc_token");
-}
-
+// Cookie-only auth: the server sets an httpOnly session cookie on login and
+// the browser sends it automatically (credentials: include). No token is ever
+// kept in JS-accessible storage, so page scripts can't leak it.
 export async function api<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const token = getToken();
   const res = await fetch(`${BASE}${path}`, {
     ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...(init.headers ?? {}),
-    },
+    headers: { "Content-Type": "application/json", ...(init.headers ?? {}) },
     credentials: "include",
   });
   const body = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error((body as { error?: string }).error ?? `Request failed (${res.status})`);
+    const err = body as { error?: string; code?: string };
+    // NOTE: no auto-redirect here. The catalog is public and anonymous calls
+    // (e.g. the session check on boot) legitimately 401 — redirecting on any
+    // 401 bounced every first-time visitor to the admin sign-in. The Admin
+    // page handles its own 401s by showing the sign-in form.
+    if (res.status === 401) {
+      try {
+        sessionStorage.setItem("cc_expired", err.code === "IDLE_TIMEOUT" ? "idle" : "expired");
+      } catch {
+        /* private mode */
+      }
+    }
+    throw new Error(err.error ?? `Request failed (${res.status})`);
   }
   return body as T;
 }
@@ -28,19 +34,21 @@ export interface Room {
   code: string;
   wing: string;
   roomType: string;
-  capacity: number;
   openMin: number;
   closeMin: number;
   status: string;
   description?: string;
 }
 
-export interface Availability {
+export interface RoomVacancy {
   roomId: string;
   code: string;
-  available: boolean;
-  conflicts: Array<{ kind: string; label: string; startMin: number; endMin: number }>;
-  occupied: Array<{ startMin: number; endMin: number; label: string }>;
+  wing: string;
+  nowFree: boolean;
+  freeBlocks: Array<{ startMin: number; endMin: number }>;
+  nextVacant: { startMin: number; endMin: number } | null;
+  longestFreeMin: number;
+  freeMinutesTotal: number;
 }
 
 export const toMin = (hhmm: string): number => {
